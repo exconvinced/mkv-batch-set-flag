@@ -1,4 +1,3 @@
-from helper import *
 from tkinter.filedialog import askdirectory
 from multiprocessing import Process
 import subprocess
@@ -47,7 +46,7 @@ def get_mkv_tracks(mkv_file) -> dict:
         def __init__(self, track) -> None:
             props = track["properties"]
             self.name = props.get("track_name", "None")
-            self.id = track["id"]
+            self.id = props["number"]
             self.language = props["language"]
             self.type = track["type"]
             self.origin = os.path.basename(mkv_file)
@@ -87,7 +86,12 @@ def set_audio_track_flag(audio_track: object) -> None:
 
     :param audio_track: This is a track (of class Track) inside an mkv file.
     """
-    is_JAP_audio = audio_track.type == "audio" and audio_track.language == "jpn"
+    if audio_track.language != "jpn":
+        audio_track.isDefault = 0
+        audio_track.isForced = 0
+        return
+
+    is_JAP_audio = audio_track.language == "jpn"
     audio_track.isDefault = 1 if is_JAP_audio else 0
     audio_track.isForced = 1 if is_JAP_audio else 0
 
@@ -106,22 +110,28 @@ def set_sub_track_flag(sub_track: object) -> None:
         sub_track.isForced = 0
         return
 
-    def count_dialogue_lines(srt):
-        pattern = r'-->'
-        lines = re.findall(pattern, srt, flags=re.MULTILINE)
-        return len(lines)
+    # def count_dialogue_lines(srt):
+    #     pattern = r'-->'
+    #     lines = re.findall(pattern, srt, flags=re.MULTILINE)
+    #     return len(lines)
 
-    srt_path = os.path.join(sub_track.path, f"{sub_track.origin}_Track_{sub_track.id}_[{sub_track.name}].srt")
-    command = [ "ffmpeg/ffmpeg", "-i", os.path.join(sub_track.path, sub_track.origin), "-map", f"0:{sub_track.id}", srt_path ]
-    subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # srt_path = os.path.join(sub_track.path, f"{sub_track.origin}_Track_{sub_track.id}_[{sub_track.name}].srt")
+    # command = [ "ffmpeg/ffmpeg", "-i", os.path.join(sub_track.path, sub_track.origin), "-map", f"0:{sub_track.id}", srt_path ]
+    # subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-    with open(srt_path, 'r') as srt:
-        dialogue_lines = count_dialogue_lines(srt.read())
-    os.remove(srt_path)
+    # with open(srt_path, 'r') as srt:
+    #     dialogue_lines = count_dialogue_lines(srt.read())
+    # os.remove(srt_path)
 
-    is_ENG_dialogue_sub = sub_track.type == "subtitles" and dialogue_lines >= 100 and sub_track.language == "eng"
-    sub_track.isDefault = 1 if is_ENG_dialogue_sub else 0
-    sub_track.isForced = 1 if is_ENG_dialogue_sub else 0
+    dialog_track_names = ["dialog", "full", "english"]
+    lyrics_track_names = ['sign', 'song', 's&s']
+
+    # is_ENG_sub = sub_track.type == "subtitles" and dialogue_lines >= 200 and sub_track.language == "eng"
+    is_ENG_dialogue = any(text in sub_track.name.lower() for text in dialog_track_names)
+    is_ENG_lyrics = any(text in sub_track.name.lower() for text in lyrics_track_names)
+
+    sub_track.isDefault = 1 if (is_ENG_dialogue and not is_ENG_lyrics) else 0
+    sub_track.isForced = 1 if (is_ENG_dialogue and not is_ENG_lyrics) else 0
 
     return
 
@@ -131,8 +141,8 @@ def generate_mkvpropedit_command(mkv_file, tracks) -> list:
     This function adds all audio and sub tracks as commandline arguments to `mkvpropedit`
     """
     command = ['ffmpeg/mkvpropedit', mkv_file]
-    for track in tracks[1:]:
-        command += ['--edit', f'track:{track.id}']
+    for track in tracks:
+        command += ["--edit", f'track:{track.id}']
         command += ['--set', f'flag-default={track.isDefault}']
         command += ['--set', f'flag-forced={track.isForced}']
     return command
@@ -175,8 +185,8 @@ def change_flags(mkv_file: str) -> None:
         elif track.type == "subtitles":
             set_sub_track_flag(track)
 
-    command = generate_mkvpropedit_command("test.mkv", tracks)
-    subprocess.run(command, stdout=subprocess.PIPE)
+    command = generate_mkvpropedit_command(mkv_file, tracks)
+    subprocess.run(command, stdout=subprocess.DEVNULL)
     print(yield_terminal_output(filename, tracks))
 
     return
