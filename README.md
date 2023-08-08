@@ -10,7 +10,7 @@ Great for preparing a huge collection of anime series before doing a marathon wa
 #### Specifications
 - Built with Python 3
 - Supports multiprocessing
-- Informative prompts
+- Color-coded terminal prompts
 
 #### Preview
 ![image](./preview/preview.gif)
